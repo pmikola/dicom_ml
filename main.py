@@ -1,4 +1,4 @@
-
+import copy
 import os
 import sys
 
@@ -15,6 +15,8 @@ from PIL import Image
 import time
 from PIL import Image, ImageEnhance
 import scipy.signal
+
+from model import HairSkinClassifier
 
 matplotlib.use("TkAgg")
 
@@ -99,77 +101,11 @@ pass_dicom = pass_dicom1
 
 filename = pydicom.data.data_manager.get_files(base, pass_dicom + '.dcm')[0]
 
-dsr = pydicom.dcmread(filename, force=True)
-dsg = pydicom.dcmread(filename, force=True)
-dsb = pydicom.dcmread(filename, force=True)
-
-
-def getnshow_dicom(ds, rgb, disp):
-    images = []
-    for i in range(ds.pixel_array.shape[0]):
-        if rgb == 'r':
-            ds.pixel_array[i, :, :, 2] = 0
-            ds.pixel_array[i, :, :, 1] = 0
-        if rgb == 'b':
-            ds.pixel_array[i, :, :, 0] = 0
-            ds.pixel_array[i, :, :, 1] = 0
-        if rgb == 'g':
-            ds.pixel_array[i, :, :, 2] = 0
-            ds.pixel_array[i, :, :, 0] = 0
-        else:
-            pass
-        images.append(ds.pixel_array[i, :, :, :])
-    show_all_pic(images, disp)
-    return images
-
-####################### PROCESSING
-####################### # PXARR
-disp = 0
-imagesr = getnshow_dicom(dsr, 'r', disp)
-imagesg = getnshow_dicom(dsg, 'g', disp)
-imagesb = getnshow_dicom(dsb, 'b', disp)
-
-####################### # SHARP
-image_kernelr = []
-image_kernelg = []
-image_kernelb = []
-for i in range(len(imagesr)):
-    image_kernelr.append(cv2.filter2D(src=imagesr[i], ddepth=-1, kernel=kernel_sharp))
-    image_kernelg.append(cv2.filter2D(src=imagesg[i], ddepth=-1, kernel=kernel_sharp))
-    image_kernelb.append(cv2.filter2D(src=imagesb[i], ddepth=-1, kernel=kernel_sharp))
-
-####################### # NORM
-images_normr, histr = Enhance(image_kernelr)
-images_normg, histg = Enhance(image_kernelg)
-images_normb, histb = Enhance(image_kernelb)
-
-####################### # 14xColor
-imgcol = np.zeros((14, 972, 1296, 3))
-imgcol[:, :, :, 0] = np.array(images_normr)[:, :, :, 0]
-imgcol[:, :, :, 1] = np.array(images_normg)[:, :, :, 1]
-imgcol[:, :, :, 2] = np.array(images_normb)[:, :, :, 2]
-
-col_avg = image_avg(imgcol)
-avg_imager = image_avg(images_normr)
-avg_imageg = image_avg(images_normg)
-avg_imageb = image_avg(images_normb)
-
-norm_param = cv2.NORM_MINMAX
-avg_normb = cv2.normalize(avg_imageb, None, 0, 255, norm_param)
-avg_normg = cv2.normalize(avg_imageg, None, 0, 255, norm_param)
-avg_normr = cv2.normalize(avg_imager, None, 0, 255, norm_param)
-avg_images = [avg_normb, avg_normg, avg_normr]
-
-# show_all_pic(avg_images,1)
-####################### # 3X1 TO 1X3
-image_comb = np.array(avg_imager)
-image_comb[:, :, 0] = avg_imager[:, :, 0]
-image_comb[:, :, 1] = avg_imageg[:, :, 1]
-image_comb[:, :, 2] = avg_imageb[:, :, 2]
-
+x = pydicom.dcmread(filename, force=True)
+model = HairSkinClassifier(disp=1)
+x = model(x)
 # show_all_pic([image_comb,image_comb],1)
-plt.imshow(image_comb)
-plt.show()
+
 sys.exit()
 
 
