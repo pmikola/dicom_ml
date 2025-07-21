@@ -6,17 +6,7 @@ import sys
 
 import cv2
 import numpy as np
-import cv2 as cv
-from skimage.feature import match_template, peak_local_max
-from skimage.transform import rescale, resize, downscale_local_mean
 from matplotlib import pyplot as plt
-import matplotlib
-from pydicom.data import get_testdata_file
-import pydicom
-from PIL import Image
-import time
-from PIL import Image, ImageEnhance
-import scipy.signal
 
 class HairSkinClassifier(nn.Module):
     def __init__(self, disp):
