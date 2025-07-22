@@ -1,20 +1,44 @@
 import copy
-
+import torch
 from torch import nn
-import os
-import sys
-
+from transformers import ViTForImageClassification, AutoImageProcessor
 import cv2
-import numpy as np
 from matplotlib import pyplot as plt
+from transformers import logging
+
+logging.set_verbosity_error()
+hair_color_model_dir = './hc_model'
+skin_type_model_dir = './skin_type_model'
+
+hc_model =  ViTForImageClassification.from_pretrained(hair_color_model_dir,local_files_only=True)
+hc_processor = AutoImageProcessor.from_pretrained(hair_color_model_dir,local_files_only=True)
+st_model = ViTForImageClassification.from_pretrained(skin_type_model_dir,local_files_only=True)
+st_processor = AutoImageProcessor.from_pretrained(skin_type_model_dir,local_files_only=True)
 
 class HairSkinClassifier(nn.Module):
-    def __init__(self, disp):
+    def __init__(self, disp,device):
         super().__init__()
         self.disp = disp
         self.kernel_sharp = np.array([[0, -1, 0],
                                       [-1, 5, -1],
                                       [0, -1, 0]])
+        self.hc_processor = hc_processor
+        self.st_processor = st_processor
+        self.model_hair_color = hc_model
+        self.model_skin_type = st_model
+
+        self.shared_downlift_space = nn.Sequential(
+            nn.Conv2d(3, 16, kernel_size=7, stride=4, padding=3),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 32, kernel_size=5, stride=2, padding=2),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 3, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.AdaptiveAvgPool2d((224, 224))
+        )
+        self.hair_color_head = nn.Linear(5,2) # Note: jasny / ciemny
+        self.skin_color_head = nn.Linear(2,4) # Note: I,II,III i IV->VI
+
     def show_all_pic(self,images, disp):
         if disp == 1:
             fig = plt.figure(figsize=(5, 5))
@@ -76,7 +100,7 @@ class HairSkinClassifier(nn.Module):
         self.show_all_pic(images, disp)
         return images
 
-    def forward(self, x):
+    def pre_processing(self,x):
         dsr = copy.deepcopy(x)
         dsg = copy.deepcopy(x)
         dsb = copy.deepcopy(x)
@@ -91,18 +115,18 @@ class HairSkinClassifier(nn.Module):
             image_kernelg.append(cv2.filter2D(src=imagesg[i], ddepth=-1, kernel=self.kernel_sharp))
             image_kernelb.append(cv2.filter2D(src=imagesb[i], ddepth=-1, kernel=self.kernel_sharp))
 
-        ####################### # NORM
+        # Note ###################### # NORM
         images_normr, histr = self.Enhance(image_kernelr)
         images_normg, histg = self.Enhance(image_kernelg)
         images_normb, histb = self.Enhance(image_kernelb)
 
-        ####################### # 14xColor
+        # Note ###################### # 14xColor
         imgcol = np.zeros((14, 972, 1296, 3))
         imgcol[:, :, :, 0] = np.array(images_normr)[:, :, :, 0]
         imgcol[:, :, :, 1] = np.array(images_normg)[:, :, :, 1]
         imgcol[:, :, :, 2] = np.array(images_normb)[:, :, :, 2]
 
-        col_avg = self.image_avg(imgcol)
+        #col_avg = self.image_avg(imgcol)
         avg_imager = self.image_avg(images_normr)
         avg_imageg = self.image_avg(images_normg)
         avg_imageb = self.image_avg(images_normb)
@@ -111,15 +135,62 @@ class HairSkinClassifier(nn.Module):
         avg_normb = cv2.normalize(avg_imageb, None, 0, 255, norm_param)
         avg_normg = cv2.normalize(avg_imageg, None, 0, 255, norm_param)
         avg_normr = cv2.normalize(avg_imager, None, 0, 255, norm_param)
-        avg_images = [avg_normb, avg_normg, avg_normr]
+        #avg_images = [avg_normb, avg_normg, avg_normr]
 
         image_comb = np.array(avg_imager)
         image_comb[:, :, 0] = avg_imager[:, :, 0]
         image_comb[:, :, 1] = avg_imageg[:, :, 1]
         image_comb[:, :, 2] = avg_imageb[:, :, 2]
         x = image_comb
+        x_f32 = x.astype(np.float32) / 255.0
+        return x_f32
+
+    @staticmethod
+    def witch_hair_color(x):
+        result = torch.argmax(x,dim=1).item()
+        if result == 0:
+            hair_color = "DARK"
+        else:
+            hair_color = "LIGHT"
+        return hair_color
+
+    @staticmethod
+    def witch_skin_color(x):
+        result = torch.argmax(x, dim=1).item()
+        if result == 0:
+            skin_color = "TYPE I"
+        elif result == 1:
+            skin_color = "TYPE II"
+        elif result == 2:
+            skin_color = "TYPE III"
+        else:
+            skin_color = "TYPE IV+"
+        return skin_color
+
+    def forward(self, x,inference=True):
+        x = self.pre_processing(x)
+        x = torch.from_numpy(x).permute(2, 0, 1).unsqueeze(0)
+        x = self.shared_downlift_space(x)
+        x_hc = self.hc_processor(x, return_tensors="pt")
+        x_hc = x_hc.pixel_values
+        x_st = self.st_processor(x, return_tensors="pt")
+        x_st = x_st.pixel_values
+
+        x_hc = self.model_hair_color(x_hc).logits
+        x_st = self.model_skin_type(x_st).logits
+
+        x_hc = self.hair_color_head(x_hc)
+        x_st = self.skin_color_head(x_st)
+
+        if inference:
+            hair_color = self.witch_hair_color(x_hc)
+            skin_color = self.witch_skin_color(x_st)
+        else:
+            hair_color = "We do learning now, not inference!"
+            skin_color = "We do learning now, not inference!"
+
         if self.disp == 1:
             plt.imshow(x)
             plt.show()
         else:pass
-        return x
+        return (x_hc, x_st),(hair_color, skin_color)
