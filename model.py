@@ -1,4 +1,6 @@
 import copy
+
+import numpy as np
 import torch
 from torch import nn
 from transformers import ViTForImageClassification, AutoImageProcessor
