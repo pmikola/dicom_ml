@@ -1,0 +1,21 @@
+version: '2'
+
+services:
+  hairskin-classifier:
+    build: .
+    container_name: hairskin-classifier-service
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount DICOM files directory (optional)
+      - ./dicom_files:/app/dicom_files:ro
+      # Mount logs directory
+      - ./logs:/app/logs
+    environment:
+      - TRANSFORMERS_OFFLINE=1
+      - HF_HUB_OFFLINE=1
+      - DEPI_MODEL_ROOT=/app
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    # Resource limits for older Docker Compose
+    mem_limit: 3g

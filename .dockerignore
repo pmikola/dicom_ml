@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Deployment scripts
+*.ps1
+deploy_jetson_master.ps1
+
+# Documentation
+*.md
+WSL2_Docker_Setup.md
+DOCKER_LEARNING_GUIDE.md
+
+# Logs
+logs/
+*.log
+
+Dockerfile.local
+docker-compose.local.yml

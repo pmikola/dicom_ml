@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  hairskin-classifier:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    image: hairskin-classifier:local
+    container_name: hairskin-classifier-local
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount logs directory
+      - ./logs:/app/logs
+    environment:
+      - TRANSFORMERS_OFFLINE=1
+      - HF_HUB_OFFLINE=1
+      - DEPI_MODEL_ROOT=/app
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

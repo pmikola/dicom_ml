@@ -1,5 +1,4 @@
 import copy
-
 import numpy as np
 import torch
 from torch import nn
@@ -7,28 +6,21 @@ from transformers import ViTForImageClassification, AutoImageProcessor
 import cv2
 from matplotlib import pyplot as plt
 from transformers import logging
-
+import os
+import sys
 logging.set_verbosity_error()
-hair_color_model_dir = './hc_model'
-skin_type_model_dir = './skin_type_model'
-
-hc_model =  ViTForImageClassification.from_pretrained(hair_color_model_dir,local_files_only=True)
-hc_processor = AutoImageProcessor.from_pretrained(hair_color_model_dir,local_files_only=True)
-st_model = ViTForImageClassification.from_pretrained(skin_type_model_dir,local_files_only=True)
-st_processor = AutoImageProcessor.from_pretrained(skin_type_model_dir,local_files_only=True)
 
 class HairSkinClassifier(nn.Module):
-    def __init__(self, disp,device):
+    def __init__(self, disp: int = 0,device:torch.device = None):
         super().__init__()
+        self._load_components_if_available()
         self.disp = disp
         self.kernel_sharp = np.array([[0, -1, 0],
                                       [-1, 5, -1],
                                       [0, -1, 0]])
-        self.hc_processor = hc_processor
-        self.st_processor = st_processor
-        self.model_hair_color = hc_model
-        self.model_skin_type = st_model
-
+        # Ensure components are loaded when constructing directly (not during unpickle)
+        self._load_components_if_available()
+        self._try_extract_assets_if_needed()
         self.shared_downlift_space = nn.Sequential(
             nn.Conv2d(3, 16, kernel_size=7, stride=4, padding=3),
             nn.ReLU(inplace=True),
@@ -40,6 +32,51 @@ class HairSkinClassifier(nn.Module):
         )
         self.hair_color_head = nn.Linear(5,2) # Note: jasny / ciemny
         self.skin_color_head = nn.Linear(2,4) # Note: I,II,III i IV->VI
+
+    def _default_root_dir(self):
+        main_mod = sys.modules.get('__main__')
+        main_file = getattr(main_mod, '__file__', None)
+        if main_file:
+            return os.path.dirname(os.path.abspath(main_file))
+        this_dir = os.path.dirname(__file__) if '__file__' in globals() else None
+        return this_dir if this_dir and os.path.isdir(this_dir) else os.getcwd()
+
+    def _resolve_model_dir(self,subdir):
+        root = os.environ.get('DEPI_MODEL_ROOT')
+        if not root:
+            root = self._default_root_dir()
+        return os.path.join(root, subdir)
+
+    def _try_extract_assets_if_needed(self):
+        root = self._default_root_dir()
+        # If assets missing, try to extract from packaged resources without importer
+        hc_cfg = os.path.join(root, 'hc_model', 'config.json')
+        st_cfg = os.path.join(root, 'skin_type_model', 'config.json')
+        if not (os.path.exists(hc_cfg) and os.path.exists(st_cfg)):
+            try:
+                import pkg_bootstrap as _bootstrap
+                _bootstrap.extract_assets_via_pkgutil(root)
+            except Exception:
+                pass
+        # Make sure offline behavior is enforced when running on targets like Jetson
+        os.environ.setdefault('DEPI_MODEL_ROOT', root)
+        os.environ.setdefault('TRANSFORMERS_OFFLINE', '1')
+        os.environ.setdefault('HF_HUB_OFFLINE', '1')
+
+    def _load_components_if_available(self):
+        #global hc_model, hc_processor, st_model, st_processor
+        self.hair_color_model_dir = self._resolve_model_dir('hc_model')
+        self.skin_type_model_dir = self._resolve_model_dir('skin_type_model')
+        self.hc_cfg = os.path.join(self.hair_color_model_dir, 'config.json')
+        self.st_cfg = os.path.join(self.skin_type_model_dir, 'config.json')
+        self.model_hair_color = None
+        self.model_skin_type = None
+        if self.model_hair_color is None and os.path.exists(self.hc_cfg):
+            self.model_hair_color = ViTForImageClassification.from_pretrained(self.hair_color_model_dir, local_files_only=True)
+            self.hc_processor = AutoImageProcessor.from_pretrained(self.hair_color_model_dir, local_files_only=True)
+        if self.model_skin_type is None and os.path.exists(self.st_cfg):
+            self.model_skin_type = ViTForImageClassification.from_pretrained(self.skin_type_model_dir, local_files_only=True)
+            self.st_processor = AutoImageProcessor.from_pretrained(self.skin_type_model_dir, local_files_only=True)
 
     def show_all_pic(self,images, disp):
         if disp == 1:

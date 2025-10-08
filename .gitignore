@@ -1,0 +1,103 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Model files (large binary files)
+*.pth
+*.pkl
+*.h5
+*.onnx
+*.pb
+*.safetensors
+*.bin
+*.msgpack
+
+# Model directories
+hc_model/
+skin_type_model/
+models/
+checkpoints/
+
+# DICOM files (medical imaging data)
+*.dcm
+*.dicom
+*.DCM
+*.DICOM
+
+# Data directories
+data/
+datasets/
+images/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+
+# Docker
+*.tar
+*.tar.gz
+docker-compose.override.yml
+registry-data/
+
+# Logs
+*.log
+logs/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.local
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Large archives
+*.zip
+*.rar
+*.7z
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
